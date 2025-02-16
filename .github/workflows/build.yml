@@ -1,0 +1,71 @@
+name: Build MCLauncher
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: windows-2019
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.3.1
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v1
+
+      - name: Restore NuGet packages
+        run: nuget restore MCLauncher.sln
+
+      - name: Build Solution
+        run: msbuild MCLauncher.sln /p:Configuration=Release /p:Platform=x64
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCLauncher-Build
+          path: |
+            x64/Release/MCLauncher.exe
+            x64/Release/MCLauncher.pdb
+            x64/Release/NewtonSoft.Json.dll
+            x64/Release/NewtonSoft.Json.pdb
+            x64/Release/WUTokenHelper.dll
+            x64/Release/WUTokenHelper.pdb
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: MCLauncher-Build
+          path: release-artifacts
+
+      - name: List downloaded artifacts (for debugging)
+        run: ls -R release-artifacts
+
+      - name: Create ZIP Archive
+        run: |
+          cd release-artifacts
+          zip -r MCLauncher-${{ github.ref_name }}.zip ./*
+          mv MCLauncher-${{ github.ref_name }}.zip ../
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: MCLauncher-${{ github.ref_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
